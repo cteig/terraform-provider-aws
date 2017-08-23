@@ -248,7 +248,7 @@ func (c *Config) Client() (interface{}, error) {
 	}
 
 	if logging.IsDebugOrHigher() {
-		awsConfig.LogLevel = aws.LogLevel(aws.LogDebugWithHTTPBody)
+		awsConfig.LogLevel = aws.LogLevel(aws.LogDebugWithHTTPBody | aws.LogDebugWithRequestRetries | aws.LogDebugWithRequestErrors)
 		awsConfig.Logger = awsLogger{}
 	}
 
@@ -385,7 +385,30 @@ func (c *Config) Client() (interface{}, error) {
 	client.wafconn = waf.New(sess)
 	client.wafregionalconn = wafregional.New(sess)
 
+	// Workaround for https://github.com/aws/aws-sdk-go/issues/1376
+	client.kinesisconn.Handlers.Retry.PushBack(func(r *request.Request) {
+		if !strings.HasPrefix(r.Operation.Name, "Describe") && !strings.HasPrefix(r.Operation.Name, "List") {
+			return
+		}
+		err, ok := r.Error.(awserr.Error)
+		if !ok || err == nil {
+			return
+		}
+		if err.Code() == kinesis.ErrCodeLimitExceededException {
+			r.Retryable = aws.Bool(true)
+		}
+	})
+
 	return &client, nil
+}
+
+func hasEc2Classic(platforms []string) bool {
+	for _, p := range platforms {
+		if p == "EC2" {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateRegion returns an error if the configured region is not a
