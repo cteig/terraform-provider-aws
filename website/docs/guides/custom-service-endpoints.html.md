@@ -141,6 +141,7 @@ The Terraform AWS Provider allows the following endpoints to be customized:
 - `redshift`
 - `resourcegroups`
 - `route53`
+- `route53domains`
 - `route53resolver`
 - `s3`
 - `s3control`
